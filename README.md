@@ -1,6 +1,6 @@
 # BetterIncoPat.js 功能简介
 
-此油猴脚本能够改善 incoPat 数据库的的使用体验。
+此油猴脚本能够改善 [incoPat](https://www.incopat.com/) 数据库的的使用体验。
 
 ## 功能对比展示
 
