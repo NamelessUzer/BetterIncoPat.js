@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BetterIncopat
 // @namespace    http://incopat.com/
-// @version      0.82
+// @version      0.83
 // @description  去除incoPat检索结果页面、IPC分类查询页面两侧的空白，有效利用宽屏显示器；专利详情查看页，添加有用的复制按钮、跳过文件名选择对话框。
 // @author       You
 // @include      *incopat.com/*
@@ -236,6 +236,9 @@ URL=${url}`;
       anUrlDownloadBtn = createButton("AN.url下载", "", () => {
         CreateURLfileAndDownload(officialURL, currentAn);
       });
+    } else {
+      openOffsiteBtn.textContent = currentAn;
+      openOffsiteBtn.onclick = () => GM_setClipboard(currentAn);
     }
 
     // 额外再加一个 “PN.url下载” 按钮
