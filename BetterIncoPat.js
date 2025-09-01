@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BetterIncopat
 // @namespace    http://incopat.com/
-// @version      0.83
+// @version      0.84
 // @description  去除incoPat检索结果页面、IPC分类查询页面两侧的空白，有效利用宽屏显示器；专利详情查看页，添加有用的复制按钮、跳过文件名选择对话框。
 // @author       You
 // @include      *incopat.com/*
@@ -68,6 +68,9 @@ URL=${url}`;
     if (typeof pageScope.currentAn === 'undefined') {
       pageScope.currentAn = "TEST_AN";
     }
+    if (typeof pageScope.currentAd === 'undefined') {
+      pageScope.currentAd = "TEST_AD";
+    }
     if (typeof pageScope.currentPnc === 'undefined') {
       // 给一个假对象，至少有 in_array 方法，避免报错
       pageScope.currentPnc = {
@@ -79,6 +82,7 @@ URL=${url}`;
 
     const currentPn = pageScope.currentPn;
     const currentAn = pageScope.currentAn;
+    const currentAd = pageScope.currentAd;
     const currentPnc = pageScope.currentPnc;
 
     // shareAddr 里取到 Query=xxx 的值
@@ -236,6 +240,29 @@ URL=${url}`;
       anUrlDownloadBtn = createButton("AN.url下载", "", () => {
         CreateURLfileAndDownload(officialURL, currentAn);
       });
+    } else if (currentPnc.in_array("JP") && (currentAn.match(/JP[TS]?-?(?<year>(?:19|20)\d{2})(?<sn>\d{6})[U]?/i) || currentAd.match(/^\d{8}$/))) {
+      openOffsiteBtn.textContent = "日本特许厅";
+      // 处理日本专利官网静态链接生成
+
+      // 解析申请号
+      const jpAnMatch = currentAn.match(/JP[TS]?-?(?<year>\d{2,4})(?<sn>\d{6})[U]?/i);
+      if (jpAnMatch) {
+        const yearInAn = jpAnMatch.groups.year;
+        const sn = jpAnMatch.groups.sn;
+
+        // 如果申请号中的年份是4位且以19或20开头，则直接使用，否则从申请日中提取年份
+        const year = (yearInAn.length === 4 && (/^(?:19|20)\d{2}/i.test(yearInAn))) ? yearInAn : currentAd.slice(0, 4);
+
+        const officialNumber = `JP-${year}-${sn}`;
+        let officialURL = `https://www.j-platpat.inpit.go.jp/c1801/PU/${officialNumber}/10/en`;
+
+        openOffsiteBtn.textContent = "日本特许厅";
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      }
     } else {
       openOffsiteBtn.textContent = currentAn;
       openOffsiteBtn.onclick = () => GM_setClipboard(currentAn);
