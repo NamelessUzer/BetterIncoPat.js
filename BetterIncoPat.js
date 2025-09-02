@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BetterIncopat
 // @namespace    http://incopat.com/
-// @version      0.84
+// @version      0.85
 // @description  去除incoPat检索结果页面、IPC分类查询页面两侧的空白，有效利用宽屏显示器；专利详情查看页，添加有用的复制按钮、跳过文件名选择对话框。
 // @author       You
 // @include      *incopat.com/*
@@ -9,7 +9,6 @@
 // @grant        GM_addStyle
 // @grant        GM_download
 // @grant        GM_setClipboard
-// @require      https://raw.githubusercontent.com/eligrey/FileSaver.js/master/src/FileSaver.js
 // ==/UserScript==
 
 (function () {
@@ -26,13 +25,15 @@
   }
 
   function CreateURLfileAndDownload(url, num) {
-    const text = `[{000214A0-0000-0000-C000-000000000046}]
-Prop3=19,11
-[InternetShortcut]
-IDList=
+    const content = `[InternetShortcut]
 URL=${url}`;
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    saveAs(blob, `${num}.url`);
+
+    // 直接使用GM_download保存文件代替FileSaver.js
+    GM_download({
+      url: "data:text/plain;charset=utf-8," + encodeURIComponent(content),
+      name: `${num}.url`,
+      saveAs: false // 不显示保存对话框
+    });
   }
 
   function SkipPdfNameSelectDialog() {
