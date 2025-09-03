@@ -25,8 +25,7 @@
   }
 
   function CreateURLfileAndDownload(url, num) {
-    const content = `[InternetShortcut]
-URL=${url}`;
+    const content = `[InternetShortcut]\r\nURL=${url}`; // 显式使用Windows系统下默认的换行符号CRLF
 
     // 直接使用GM_download保存文件代替FileSaver.js
     GM_download({
