@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BetterIncopat
 // @namespace    http://incopat.com/
-// @version      0.85
+// @version      0.86
 // @description  去除incoPat检索结果页面、IPC分类查询页面两侧的空白，有效利用宽屏显示器；专利详情查看页，添加有用的复制按钮、跳过文件名选择对话框。
 // @author       You
 // @include      *incopat.com/*
@@ -175,6 +175,19 @@
 
       anUrlDownloadBtn = createButton("AN.url下载", "", () => {
         CreateURLfileAndDownload(officialURL, currentPn.slice(0, -1));
+      });
+
+    } else if (currentPnc.in_array("FR")) {
+      openOffsiteBtn.textContent = "法国国家工业产权局";
+      // 从 currentPn 提取基础公开号，移除结尾的 A1/B1/U1 等后缀
+      let officialNumber = currentPn.replace(/^FR(\d{7,8})[A-Z]\d?$/i, 'FR$1');
+      // 法国国家工业产权局官网静态链接中使用的是公开公告号中的基础号码，
+      // 与中国的公开公告号的结构相同，同一件专利的公开号、公告号的基础号码相同，如FR2847009A1是公开号，FR2847009B1是公告号，静态链接中使用基础号码，如FR2847009。
+      officialURL = `https://data.inpi.fr/brevets/${officialNumber}`;
+      openOffsiteBtn.onclick = () => window.open(officialURL);
+
+      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+        CreateURLfileAndDownload(officialURL, currentAn);
       });
 
     } else if (/^RU(\d+)S/i.test(num)) {
