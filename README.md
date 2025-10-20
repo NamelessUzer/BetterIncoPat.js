@@ -4,7 +4,7 @@
 
 ## 功能对比展示
 
-以此专利 [US4047776A](https://www.incopat.com/detail/initCompareNoAuth?compareQuery=6kAA9aiVVEjzWpcRLhS5MQ%3D%3D) 为例。
+以此专利 [US4047776A](https://www.incopat.com/detail/init2?formerQuery=6kAA9aiVVEjzWpcRLhS5MQ%3D%3D) 为例。
 
 ### 官方原始专利详情页
 

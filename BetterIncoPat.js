@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BetterIncopat
 // @namespace    http://incopat.com/
-// @version      0.86
+// @version      0.9
 // @description  去除incoPat检索结果页面、IPC分类查询页面两侧的空白，有效利用宽屏显示器；专利详情查看页，添加有用的复制按钮、跳过文件名选择对话框。
 // @author       You
 // @include      *incopat.com/*
@@ -36,270 +36,262 @@
   }
 
   function SkipPdfNameSelectDialog() {
-    // 去掉多余空格
     if (!window.location.href.startsWith("https://www.incopat.com/detail/")) {
       return;
     }
-    const pdfBtn = document.querySelector("#pdfBtn");
-    if (pdfBtn) {
-      pdfBtn.addEventListener("click", function () {
-        setTimeout(() => {
-          // 有时这个元素没渲染好，要先判空
-          const pdfDialog = document.querySelector("#xxzlpdfCongener");
-          if (pdfDialog) pdfDialog.click();
-        }, 20);
-      });
+
+    // 等待PDF按钮加载，并监听点击事件
+    function attachPdfListener() {
+      const pdfBtn = document.querySelector("#header_patentDownloadBtn");
+      if (pdfBtn && !pdfBtn.dataset.listenerAttached) {
+        pdfBtn.dataset.listenerAttached = "true";
+        pdfBtn.addEventListener("click", function () {
+          setTimeout(() => {
+            // 新版前端的确定按钮是 #pdfDownload_confirm
+            const confirmBtn = document.querySelector("#pdfDownload_confirm");
+            if (confirmBtn) confirmBtn.click();
+          }, 100);
+        });
+      }
     }
+
+    // 立即执行一次
+    attachPdfListener();
+
+    // 使用 MutationObserver 监听 DOM 变化，因为PDF按钮可能是动态显示的
+    const observer = new MutationObserver(() => {
+      attachPdfListener();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class']
+    });
   }
 
   function AddCopyButtons() {
-    // 同样去掉多余空格
     if (!window.location.href.startsWith("https://www.incopat.com/detail/")) {
       return;
     }
 
-    // === 处理 currentAn / currentPn / currentPnc 未定义的问题 ===
-    // 如果 incopat 的页面本身会注入这几个变量，就尝试从 window 里拿
-    // 如果页面本身没有，那就先给个默认值，避免报错
     const pageScope = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    if (typeof pageScope.currentPn === 'undefined') {
-      pageScope.currentPn = "TEST_PN";
+    const patentData = pageScope.patentList && pageScope.patentList[0];
+
+    const currentPn = pageScope.currentPn || (patentData && patentData.pn) || "";
+    const currentAn = pageScope.currentAn || (patentData && patentData.an) || "";
+    const currentAd = pageScope.currentAd || "";
+    const currentPnc = pageScope.currentPnc || { in_array: () => false };
+
+    if (!currentPn || !currentAn) {
+      console.error("BetterIncoPat: 无法获取专利号码信息");
+      return;
     }
-    if (typeof pageScope.currentAn === 'undefined') {
-      pageScope.currentAn = "TEST_AN";
+
+    // 获取标题
+    let title = "";
+    if (patentData && patentData.title) {
+      try {
+        title = JSON.parse('"' + patentData.title + '"');
+      } catch (e) {
+        title = patentData.title;
+      }
     }
-    if (typeof pageScope.currentAd === 'undefined') {
-      pageScope.currentAd = "TEST_AD";
-    }
-    if (typeof pageScope.currentPnc === 'undefined') {
-      // 给一个假对象，至少有 in_array 方法，避免报错
-      pageScope.currentPnc = {
-        in_array: function () {
-          return false;
+    if (!title) title = "未知标题";
+
+    // 等待data-pnk加载
+    function waitForDataPnk(callback, maxAttempts = 20) {
+      let attempts = 0;
+      const checkInterval = setInterval(() => {
+        const shareBtn = document.querySelector("#shareBtn");
+        if (shareBtn && shareBtn.dataset.pnk) {
+          clearInterval(checkInterval);
+          callback(shareBtn.dataset.pnk);
+        } else if (++attempts >= maxAttempts) {
+          clearInterval(checkInterval);
+          if (shareBtn) {
+            shareBtn.click();
+            setTimeout(() => {
+              document.querySelector("#closeShare")?.click();
+              if (shareBtn.dataset.pnk) callback(shareBtn.dataset.pnk);
+            }, 500);
+          }
         }
-      };
+      }, 200);
     }
 
-    const currentPn = pageScope.currentPn;
-    const currentAn = pageScope.currentAn;
-    const currentAd = pageScope.currentAd;
-    const currentPnc = pageScope.currentPnc;
+    waitForDataPnk((encryptedPnk) => {
+      const url = `https://www.incopat.com/detail/init2?formerQuery=${encryptedPnk}`;
+      const num = currentPn;
+      const combinedInfo = `${num}\t${title}\t${url}`;
 
-    // shareAddr 里取到 Query=xxx 的值
-    const shareAddr = document.querySelector("#shareAddr");
-    if (!shareAddr) return;
-    const regex = /(?<=Query=)[0-9a-z%]+(?=&|)/i;
-    const match = shareAddr.value.match(regex);
-    if (!match) return;
-    const url = `https://www.incopat.com/detail/initCompareNoAuth?compareQuery=${match[0]}`;
+      // 找到标签容器
+      const patentLabels = document.querySelector("#patentLabels");
+      if (!patentLabels) {
+        console.error("BetterIncoPat: 找不到标签容器");
+        return;
+      }
 
-    // 页面头部 title
-    const headElement = document.querySelector(".title");
-    if (!headElement) return;
+      // 隐藏原有的公开号和标题显示
+      const currentPatentNumber = document.querySelector("#currentPatentNumber");
+      if (currentPatentNumber) {
+        currentPatentNumber.style.display = 'none';
+      }
+      const currentPnTitle = document.querySelector("#currentPnTitle");
+      if (currentPnTitle) {
+        currentPnTitle.style.display = 'none';
+      }
 
-    // var num = currentPn; var title = headElement.querySelector("#copyText").innerText;
-    const numEl = headElement.querySelector("#copyText");
-    if (!numEl) return;
-    const num = currentPn;
-    const title = numEl.innerText;
-    const combinedInfo = `${num}\t${title}\t${url}`;
+      // 创建按钮
+      function createButton(text, titleTip, onClick) {
+        const btn = document.createElement("a");
+        btn.textContent = text;
+        btn.style.cssText = 'cursor: pointer; padding: 4px 10px; margin-left: 6px; border-radius: 3px; text-decoration: none; font-size: 14px; line-height: normal; display: inline-block; border: 1px solid #ccc; white-space: nowrap; transition: all 0.2s; background-color: #fff;';
+        if (titleTip) btn.title = titleTip;
+        btn.addEventListener("mouseenter", () => {
+          btn.style.backgroundColor = '#e8e8e8';
+          btn.style.borderColor = '#007bff';
+        });
+        btn.addEventListener("mouseleave", () => {
+          btn.style.backgroundColor = '#fff';
+          btn.style.borderColor = '#ccc';
+        });
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          onClick();
+        });
+        patentLabels.appendChild(btn);
+        return btn;
+      }
 
-    // 找到用来插入的锚点（脚本里原本是 titleBtn 或者 pdfBtn ）
-    let pdfBtn = document.querySelector("#pdfBtn");
-    let titleBtn = headElement.querySelector(".copy");
-    // 如果 pdfBtn 有可能不存在，就优先用 titleBtn，当它们都不存在时，就把 headElement 作为容器
-    const targetElement = pdfBtn || titleBtn || headElement;
+      // 创建所有按钮
+      createButton(currentPn, "点击复制公开号", () => GM_setClipboard(currentPn));
+      createButton(
+        title.length < 30 ? title : title.slice(0, 30) + "...",
+        title,
+        () => GM_setClipboard(title)
+      );
+      createButton("链接", url, () => GM_setClipboard(url));
+      createButton("号码、标题、链接", combinedInfo, () => GM_setClipboard(combinedInfo));
 
-    // ==== 封装一个插入按钮的小函数 ====
-    function createButton(text, titleTip, onClick) {
-      const btn = document.createElement("a");
-      btn.textContent = text;
-      if (titleTip) btn.title = titleTip; // 鼠标悬停提示
-      btn.addEventListener("click", onClick);
-      // 在 targetElement 之前插入
-      targetElement.parentNode.insertBefore(btn, targetElement);
-      return btn;
-    }
+      // 官方网站按钮
+      const openOffsiteBtn = createButton("官方网站", "", () => {});
+      let anUrlDownloadBtn;
+      let officialURL = "";
+      let officialNumber = "";
 
-    // -- 依次创建想要的按钮 --
-    createButton(num, "", () => GM_setClipboard(num)); // 复制申请号
-    createButton(
-      title.length < 120 ? title : title.slice(0, 120) + "...",
-      title,
-      () => GM_setClipboard(title)
-    ); // 复制标题
-    createButton("链接", url, () => GM_setClipboard(url)); // 复制链接
-    createButton("号码、标题、链接", combinedInfo, () => GM_setClipboard(combinedInfo));
-
-    // -- “官方检索”按钮
-    const openOffsiteBtn = createButton("官方网站", "", () => {});
-    // -- “AN.url下载”按钮（部分专利才会插入）
-    let anUrlDownloadBtn;
-
-    // 官方链接在不同国家/地区专利号下处理不一样
-    let officialURL = "";
-    let officialNumber = "";
-
-    if (/^CN\d+(?:[ABCDSUY]\d?)?$/i.test(num)) {
-      openOffsiteBtn.textContent = "国家知识产权局";
-      officialNumber = num;
-      officialURL = `http://epub.cnipa.gov.cn/patent/${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-    } else if (/^TW([IM]?\d+)/i.test(num)) {
-      openOffsiteBtn.textContent = "台湾经济部智慧财产局";
-      officialNumber = num.match(/^TW([IM]?\d+)/i)[1];
-      officialURL = `https://tiponet.tipo.gov.tw/twpat3/twpatc/twpatkm?!!FRURL${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (/^EP(\d+)/i.test(num)) {
-      openOffsiteBtn.textContent = "欧洲专利局";
-      officialNumber = currentAn;
-      officialURL = `https://worldwide.espacenet.com/patent/search?q=ap%3D${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (/^EU(\d{13})S/i.test(num)) {
-      openOffsiteBtn.textContent = "欧盟知识产权局";
-      // 拆分 currentPn 生成官方查询号
-      officialNumber = currentPn.slice(2,-5) + "-" + currentPn.slice(-5, -1);
-      officialURL = `https://euipo.europa.eu/eSearch/#details/designs/${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentPn.slice(0, -1));
-      });
-
-    } else if (currentPnc.in_array("FR")) {
-      openOffsiteBtn.textContent = "法国国家工业产权局";
-      // 从 currentPn 提取基础公开号，移除结尾的 A1/B1/U1 等后缀
-      let officialNumber = currentPn.replace(/^FR(\d{7,8})[A-Z]\d?$/i, 'FR$1');
-      // 法国国家工业产权局官网静态链接中使用的是公开公告号中的基础号码，
-      // 与中国的公开公告号的结构相同，同一件专利的公开号、公告号的基础号码相同，如FR2847009A1是公开号，FR2847009B1是公告号，静态链接中使用基础号码，如FR2847009。
-      officialURL = `https://data.inpi.fr/brevets/${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (/^RU(\d+)S/i.test(num)) {
-      openOffsiteBtn.textContent = "俄罗斯联邦知识产权局";
-      officialNumber = currentPn.slice(2,-1).padStart(8, "0");
-      officialURL = `https://www.fips.ru/cdfi/fips.dll?ty=29&docid=${officialNumber}&ki=S`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, "RU" + officialNumber + "S");
-      });
-
-    } else if (/^US(\d+)/i.test(num)) {
-      openOffsiteBtn.textContent = "美国专利商标局";
-      const m = currentAn.match(/US(\d+)/i);
-      officialNumber = m ? m[1] : "000000"; // 解析不出就给个默认
-      officialURL = `https://globaldossier.uspto.gov/#/result/application/US/${officialNumber}/123456`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (/WO(?:[A-Z]{2})?(\d+)/i.test(num)) {
-      openOffsiteBtn.textContent = "世界知识产权组织";
-      const w = num.match(/WO(?:[A-Z]{2})?(\d+)/i);
-      officialNumber = w ? w[1] : "";
-      officialURL = `https://patentscope2.wipo.int/search/zh/detail.jsf?docId=WO${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (currentPnc.in_array("KR")) {
-      openOffsiteBtn.textContent = "韩国知识产权局";
-      officialNumber = currentAn.slice(2);
-      // officialURL = `https://doi.org/10.8080/${officialNumber}?urlappend=en`;
-      // 韩国专利局官网不再支持直接在网址中添加参数指定英文显示页面
-      officialURL = `https://doi.org/10.8080/${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (currentPnc.in_array("CA")) {
-      openOffsiteBtn.textContent = "加拿大知识产权局";
-      officialNumber = currentAn.slice(2);
-      officialURL = `https://www.ic.gc.ca/opic-cipo/cpd/eng/patent/${officialNumber}/summary.html`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-
-    } else if (currentPnc.in_array("AU")) {
-      openOffsiteBtn.textContent = "澳大利亚知识产权局";
-      officialNumber = currentAn.slice(2);
-      officialURL = `http://pericles.ipaustralia.gov.au/ols/auspat/applicationDetails.do?applicationNo=${officialNumber}`;
-      openOffsiteBtn.onclick = () => window.open(officialURL);
-
-      anUrlDownloadBtn = createButton("AN.url下载", "", () => {
-        CreateURLfileAndDownload(officialURL, currentAn);
-      });
-    } else if (currentPnc.in_array("JP") && (currentAn.match(/JP[TS]?-?(?<year>(?:19|20)\d{2})(?<sn>\d{6})[U]?/i) || currentAd.match(/^\d{8}$/))) {
-      openOffsiteBtn.textContent = "日本特许厅";
-      // 处理日本专利官网静态链接生成
-
-      // 解析申请号
-      const jpAnMatch = currentAn.match(/JP[TS]?-?(?<year>\d{2,4})(?<sn>\d{6})[U]?/i);
-      if (jpAnMatch) {
-        const yearInAn = jpAnMatch.groups.year;
-        const sn = jpAnMatch.groups.sn;
-
-        // 如果申请号中的年份是4位且以19或20开头，则直接使用，否则从申请日中提取年份
-        const year = (yearInAn.length === 4 && (/^(?:19|20)\d{2}/i.test(yearInAn))) ? yearInAn : currentAd.slice(0, 4);
-
-        const officialNumber = `JP-${year}-${sn}`;
-        let officialURL = `https://www.j-platpat.inpit.go.jp/c1801/PU/${officialNumber}/10/en`;
-
-        openOffsiteBtn.textContent = "日本特许厅";
+      if (/^CN\d+(?:[ABCDSUY]\d?)?$/i.test(num)) {
+        openOffsiteBtn.textContent = "国家知识产权局";
+        officialNumber = num;
+        officialURL = `http://epub.cnipa.gov.cn/patent/${officialNumber}`;
         openOffsiteBtn.onclick = () => window.open(officialURL);
-
+      } else if (/^TW([IM]?\d+)/i.test(num)) {
+        openOffsiteBtn.textContent = "台湾经济部智慧财产局";
+        officialNumber = num.match(/^TW([IM]?\d+)/i)[1];
+        officialURL = `https://tiponet.tipo.gov.tw/twpat3/twpatc/twpatkm?!!FRURL${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
         anUrlDownloadBtn = createButton("AN.url下载", "", () => {
           CreateURLfileAndDownload(officialURL, currentAn);
         });
+      } else if (/^EP(\d+)/i.test(num)) {
+        openOffsiteBtn.textContent = "欧洲专利局";
+        officialNumber = currentAn;
+        officialURL = `https://worldwide.espacenet.com/patent/search?q=ap%3D${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (/^EU(\d{13})S/i.test(num)) {
+        openOffsiteBtn.textContent = "欧盟知识产权局";
+        officialNumber = currentPn.slice(2,-5) + "-" + currentPn.slice(-5, -1);
+        officialURL = `https://euipo.europa.eu/eSearch/#details/designs/${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentPn.slice(0, -1));
+        });
+      } else if (currentPnc.in_array("FR")) {
+        openOffsiteBtn.textContent = "法国国家工业产权局";
+        let officialNumber = currentPn.replace(/^FR(\d{7,8})[A-Z]\d?$/i, 'FR$1');
+        officialURL = `https://data.inpi.fr/brevets/${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (/^RU(\d+)S/i.test(num)) {
+        openOffsiteBtn.textContent = "俄罗斯联邦知识产权局";
+        officialNumber = currentPn.slice(2,-1).padStart(8, "0");
+        officialURL = `https://www.fips.ru/cdfi/fips.dll?ty=29&docid=${officialNumber}&ki=S`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, "RU" + officialNumber + "S");
+        });
+      } else if (/^US(\d+)/i.test(num)) {
+        openOffsiteBtn.textContent = "美国专利商标局";
+        const m = currentAn.match(/US(\d+)/i);
+        officialNumber = m ? m[1] : "000000";
+        officialURL = `https://globaldossier.uspto.gov/#/result/application/US/${officialNumber}/123456`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (/WO(?:[A-Z]{2})?(\d+)/i.test(num)) {
+        openOffsiteBtn.textContent = "世界知识产权组织";
+        const w = num.match(/WO(?:[A-Z]{2})?(\d+)/i);
+        officialNumber = w ? w[1] : "";
+        officialURL = `https://patentscope2.wipo.int/search/zh/detail.jsf?docId=WO${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (currentPnc.in_array("KR")) {
+        openOffsiteBtn.textContent = "韩国知识产权局";
+        officialNumber = currentAn.slice(2);
+        officialURL = `https://doi.org/10.8080/${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (currentPnc.in_array("CA")) {
+        openOffsiteBtn.textContent = "加拿大知识产权局";
+        officialNumber = currentAn.slice(2);
+        officialURL = `https://www.ic.gc.ca/opic-cipo/cpd/eng/patent/${officialNumber}/summary.html`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (currentPnc.in_array("AU")) {
+        openOffsiteBtn.textContent = "澳大利亚知识产权局";
+        officialNumber = currentAn.slice(2);
+        officialURL = `http://pericles.ipaustralia.gov.au/ols/auspat/applicationDetails.do?applicationNo=${officialNumber}`;
+        openOffsiteBtn.onclick = () => window.open(officialURL);
+        anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+          CreateURLfileAndDownload(officialURL, currentAn);
+        });
+      } else if (currentPnc.in_array("JP") && (currentAn.match(/JP[TS]?-?(?:19|20)\d{2}\d{6}[U]?/i) || currentAd.match(/^\d{8}$/))) {
+        openOffsiteBtn.textContent = "日本特许厅";
+        const jpAnMatch = currentAn.match(/JP[TS]?-?(?<year>\d{2,4})(?<sn>\d{6})[U]?/i);
+        if (jpAnMatch) {
+          const yearInAn = jpAnMatch.groups.year;
+          const sn = jpAnMatch.groups.sn;
+          const year = (yearInAn.length === 4 && (/^(?:19|20)\d{2}/i.test(yearInAn))) ? yearInAn : currentAd.slice(0, 4);
+          const officialNumber = `JP-${year}-${sn}`;
+          let officialURL = `https://www.j-platpat.inpit.go.jp/c1801/PU/${officialNumber}/10/en`;
+          openOffsiteBtn.onclick = () => window.open(officialURL);
+          anUrlDownloadBtn = createButton("AN.url下载", "", () => {
+            CreateURLfileAndDownload(officialURL, currentAn);
+          });
+        }
+      } else {
+        // 没有官网链接的情况，显示申请号按钮
+        createButton(currentAn, "点击复制申请号", () => GM_setClipboard(currentAn));
       }
-    } else {
-      openOffsiteBtn.textContent = currentAn;
-      openOffsiteBtn.onclick = () => GM_setClipboard(currentAn);
-    }
 
-    // 额外再加一个 “PN.url下载” 按钮
-    createButton("PN.url下载", "", () => {
-      CreateURLfileAndDownload(url, num);
+      // PN.url下载按钮
+      createButton("PN.url下载", "", () => {
+        CreateURLfileAndDownload(url, num);
+      });
     });
-
-    // 最后把原页面中的号码/标题/复制按钮等删掉
-    // 原脚本是这样写的：
-    //   HeadElement.getElementsByTagName("span")[0].remove();
-    //   HeadElement.getElementsByTagName("span")[0].remove();
-    //   HeadElement.getElementsByClassName("copy")[0].remove();
-    // 有时候不一定是两个 span，所以更安全是把所有都删：
-    const spans = headElement.getElementsByTagName("span");
-    while (spans.length > 0) {
-      spans[0].remove();
-    }
-    const copyEls = headElement.getElementsByClassName("copy");
-    while (copyEls.length > 0) {
-      copyEls[0].remove();
-    }
   }
 
   function DOM_ContentReady() {
