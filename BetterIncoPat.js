@@ -77,25 +77,57 @@
     }
 
     const pageScope = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-    const patentData = pageScope.patentList && pageScope.patentList[0];
 
-    const currentPn = pageScope.currentPn || (patentData && patentData.pn) || "";
-    const currentAn = pageScope.currentAn || (patentData && patentData.an) || "";
+    // 优先使用全局变量获取当前专利信息
+    let currentPn = pageScope.currentPn || "";
+    let currentAn = pageScope.currentAn || "";
     const currentAd = pageScope.currentAd || "";
     const currentPnc = pageScope.currentPnc || { in_array: () => false };
+
+    // 如果全局变量不存在，从patentList中获取（需要先获取正确的索引）
+    if (!currentPn || !currentAn) {
+      let currentIndex = 0;
+      const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+      if (currentIndexElement && currentIndexElement.textContent) {
+        // 页面显示的索引从1开始计数，需要减1转为数组索引（从0开始）
+        const displayIndex = parseInt(currentIndexElement.textContent.trim());
+        if (!isNaN(displayIndex) && displayIndex > 0) {
+          currentIndex = displayIndex - 1;
+        }
+      }
+      const patentData = pageScope.patentList && pageScope.patentList[currentIndex];
+      if (!currentPn && patentData) currentPn = patentData.pn || "";
+      if (!currentAn && patentData) currentAn = patentData.an || "";
+    }
 
     if (!currentPn || !currentAn) {
       console.error("BetterIncoPat: 无法获取专利号码信息");
       return;
     }
 
-    // 获取标题
+    // 获取标题：优先从DOM元素获取，其次从patentList获取
     let title = "";
-    if (patentData && patentData.title) {
-      try {
-        title = JSON.parse('"' + patentData.title + '"');
-      } catch (e) {
-        title = patentData.title;
+    const titleElement = document.querySelector("#currentPnTitle_fullTitle") || document.querySelector("#currentPnTitle_truncatedTitle");
+    if (titleElement && titleElement.textContent) {
+      title = titleElement.textContent.trim();
+    }
+    // 如果DOM中没有，尝试从patentList获取
+    if (!title && pageScope.patentList) {
+      let currentIndex = 0;
+      const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+      if (currentIndexElement && currentIndexElement.textContent) {
+        const displayIndex = parseInt(currentIndexElement.textContent.trim());
+        if (!isNaN(displayIndex) && displayIndex > 0) {
+          currentIndex = displayIndex - 1;
+        }
+      }
+      const patentData = pageScope.patentList[currentIndex];
+      if (patentData && patentData.title) {
+        try {
+          title = JSON.parse('"' + patentData.title + '"');
+        } catch (e) {
+          title = patentData.title;
+        }
       }
     }
     if (!title) title = "未知标题";
@@ -297,7 +329,10 @@
   function DOM_ContentReady() {
     console.log("==> DOMContentLoaded");
     SkipPdfNameSelectDialog();
-    AddCopyButtons();
+    // 延迟执行，等待页面索引更新
+    setTimeout(() => {
+      AddCopyButtons();
+    }, 500);
   }
 
   function pageFullyLoaded() {
