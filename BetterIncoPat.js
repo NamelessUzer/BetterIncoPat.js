@@ -88,11 +88,15 @@
     if (!currentPn || !currentAn) {
       let currentIndex = 0;
       const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+      const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
+      const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
+
       if (currentIndexElement && currentIndexElement.textContent) {
-        // 页面显示的索引从1开始计数，需要减1转为数组索引（从0开始）
+        // 页面显示的索引从1开始，需要减去startRow和1得到patentList中的索引
         const displayIndex = parseInt(currentIndexElement.textContent.trim());
         if (!isNaN(displayIndex) && displayIndex > 0) {
-          currentIndex = displayIndex - 1;
+          currentIndex = displayIndex - startRow - 1;
+          console.log(`BetterIncoPat调试: 显示索引=${displayIndex}, startRow=${startRow}, patentList索引=${currentIndex}`);
         }
       }
       const patentData = pageScope.patentList && pageScope.patentList[currentIndex];
@@ -115,10 +119,13 @@
     if (!title && pageScope.patentList) {
       let currentIndex = 0;
       const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+      const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
+      const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
+
       if (currentIndexElement && currentIndexElement.textContent) {
         const displayIndex = parseInt(currentIndexElement.textContent.trim());
         if (!isNaN(displayIndex) && displayIndex > 0) {
-          currentIndex = displayIndex - 1;
+          currentIndex = displayIndex - startRow - 1;
         }
       }
       const patentData = pageScope.patentList[currentIndex];
