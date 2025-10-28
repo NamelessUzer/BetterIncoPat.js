@@ -87,18 +87,27 @@
     // 如果全局变量不存在，从patentList中获取（需要先获取正确的索引）
     if (!currentPn || !currentAn) {
       let currentIndex = 0;
-      const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
-      const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
-      const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
 
-      if (currentIndexElement && currentIndexElement.textContent) {
-        // 页面显示的索引从1开始，需要减去startRow和1得到patentList中的索引
-        const displayIndex = parseInt(currentIndexElement.textContent.trim());
-        if (!isNaN(displayIndex) && displayIndex > 0) {
-          currentIndex = displayIndex - startRow - 1;
-          console.log(`BetterIncoPat调试: 显示索引=${displayIndex}, startRow=${startRow}, patentList索引=${currentIndex}`);
+      // 当patentList只有1项时（如未登录通过URL直接打开），直接使用索引0
+      if (pageScope.patentList && pageScope.patentList.length === 1) {
+        currentIndex = 0;
+        console.log('BetterIncoPat调试：patentList只有1项，直接使用索引0');
+      } else {
+        // 正常情况下，根据页面显示索引计算
+        const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+        const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
+        const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
+
+        if (currentIndexElement && currentIndexElement.textContent) {
+          // 页面显示的索引从1开始，需要减去startRow和1得到patentList中的索引
+          const displayIndex = parseInt(currentIndexElement.textContent.trim());
+          if (!isNaN(displayIndex) && displayIndex > 0) {
+            currentIndex = displayIndex - startRow - 1;
+            console.log(`BetterIncoPat调试：显示索引=${displayIndex}，startRow=${startRow}，patentList索引=${currentIndex}`);
+          }
         }
       }
+
       const patentData = pageScope.patentList && pageScope.patentList[currentIndex];
       if (!currentPn && patentData) currentPn = patentData.pn || "";
       if (!currentAn && patentData) currentAn = patentData.an || "";
@@ -118,14 +127,21 @@
     // 如果DOM中没有，尝试从patentList获取
     if (!title && pageScope.patentList) {
       let currentIndex = 0;
-      const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
-      const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
-      const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
 
-      if (currentIndexElement && currentIndexElement.textContent) {
-        const displayIndex = parseInt(currentIndexElement.textContent.trim());
-        if (!isNaN(displayIndex) && displayIndex > 0) {
-          currentIndex = displayIndex - startRow - 1;
+      // 当patentList只有1项时（如未登录通过URL直接打开），直接使用索引0
+      if (pageScope.patentList.length === 1) {
+        currentIndex = 0;
+      } else {
+        // 正常情况下，根据页面显示索引计算
+        const currentIndexElement = document.querySelector("#resultList_current") || document.querySelector("#currentPnIndex");
+        const solrQueryBean = pageScope.solrQueryBeanDetailNew || pageScope.solrQueryBean;
+        const startRow = solrQueryBean ? parseInt(solrQueryBean.startRow || 0) : 0;
+
+        if (currentIndexElement && currentIndexElement.textContent) {
+          const displayIndex = parseInt(currentIndexElement.textContent.trim());
+          if (!isNaN(displayIndex) && displayIndex > 0) {
+            currentIndex = displayIndex - startRow - 1;
+          }
         }
       }
       const patentData = pageScope.patentList[currentIndex];
